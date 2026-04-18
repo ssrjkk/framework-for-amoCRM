@@ -50,8 +50,7 @@ jobs:
         run: mypy api core config --ignore-missing-imports || true
 
   # ============================================
-  # UNIT TESTS
-  # ============================================
+# UNIT TESTS
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -67,13 +66,14 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run unit tests
-        run: pytest tests/ -v --cov --cov-report=xml -m "not integration"
+        run: pytest tests/ -v --cov --cov-report=xml --cov-fail-under=70 -m "not integration"
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
           flags: unittests
+          fail_ci_if_error: false
 
   # ============================================
   # SMOKE TESTS (Fast feedback)
@@ -174,6 +174,7 @@ jobs:
         with:
           name: allure-db
           path: reports/allure-db/
+          retention-days: 7
 
   # ============================================
   # UI TESTS (Playwright)
