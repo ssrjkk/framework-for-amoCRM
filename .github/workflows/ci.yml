@@ -435,14 +435,16 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        if: secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
 
       - name: Send Discord notification
-        if: secrets.DISCORD_WEBHOOK != ''
         run: |
-          curl -X POST ${{ secrets.DISCORD_WEBHOOK }} \
-            -H "Content-Type: application/json" \
-            -d '{"content": "⚠️ CI Pipeline FAILED on main branch! Check: https://github.com/${{ github.repository }}/actions"}'
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -X POST $DISCORD_WEBHOOK \
+              -H "Content-Type: application/json" \
+              -d '{"content": "⚠️ CI Pipeline FAILED on main branch! Check: https://github.com/${{ github.repository }}/actions"}'
+          fi
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Send Slack notification
         if: false
@@ -475,4 +477,3 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        if: secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
