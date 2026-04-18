@@ -51,6 +51,11 @@ class TestUsersCRUD:
         response = users_api.update(1, name="Updated User")
         assert response.status_code in (200, 404)
 
+    def test_update_user_with_email(self, users_api: UsersApi):
+        """Test update user with email."""
+        response = users_api.update(1, email="updated@test.com")
+        assert response.status_code in (200, 404)
+
     def test_delete_user(self, users_api: UsersApi):
         """Test delete user."""
         response = users_api.delete(999)

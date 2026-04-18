@@ -96,3 +96,17 @@ class TestCompaniesEdgeCases:
             website="https://webcorp.example.com",
         )
         ResponseValidator(response).status(201).raise_if_errors()
+
+    def test_update_company_with_website_and_phone(self, companies_api: CompaniesApi):
+        """Test update company with website and phone."""
+        response = companies_api.update(1, name="Updated", website="https://updated.com", phone="+123")
+        assert response.status_code in (200, 404)
+
+    def test_client_property(self, companies_api: CompaniesApi):
+        """Test client property."""
+        assert companies_api.client is not None
+
+    def test_get_list_pagination(self, companies_api: CompaniesApi):
+        """Test get_list with pagination."""
+        response = companies_api.get_list(page=2, per_page=10)
+        assert response.status_code == 200

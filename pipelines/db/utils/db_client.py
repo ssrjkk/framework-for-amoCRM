@@ -1,4 +1,5 @@
 import psycopg2
+import psycopg2.pool
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from config.settings import DB_DSN

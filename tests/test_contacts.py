@@ -103,10 +103,15 @@ class TestContactsEdgeCases:
 
     def test_create_contact_with_all_fields(self, contacts_api: ContactsApi, sample_contact):
         """Test create contact with all fields."""
-        response = contacts_api.create(
-            name=sample_contact["name"],
-            email=sample_contact["email"],
-            phone=sample_contact["phone"],
-            company_id=1,
-        )
+        response = contacts_api.create(**sample_contact)
+        ResponseValidator(response).status(201).raise_if_errors()
+
+    def test_update_contact_with_all_fields(self, contacts_api: ContactsApi):
+        """Test update contact with all fields."""
+        response = contacts_api.update(1, name="Updated", email="updated@test.com", phone="+123")
+        assert response.status_code in (200, 404)
+
+    def test_create_contact_with_company_id(self, contacts_api: ContactsApi):
+        """Test create contact with company_id."""
+        response = contacts_api.create(name="With Company", company_id=1)
         ResponseValidator(response).status(201).raise_if_errors()

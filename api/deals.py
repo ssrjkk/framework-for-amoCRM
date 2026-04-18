@@ -59,7 +59,7 @@ class DealsApi(BaseApi):
 
     def delete(self, deal_id: int) -> requests.Response:
         """Delete deal."""
-        return self.delete(str(deal_id))
+        return super().delete(str(deal_id))
 
     def update_status(self, deal_id: int, status: str) -> requests.Response:
         """Update deal status."""

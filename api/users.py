@@ -48,4 +48,4 @@ class UsersApi(BaseApi):
 
     def delete(self, user_id: int) -> requests.Response:
         """Delete user."""
-        return self.delete(str(user_id))
+        return super().delete(str(user_id))

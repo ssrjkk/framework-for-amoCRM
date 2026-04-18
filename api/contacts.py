@@ -61,7 +61,7 @@ class ContactsApi(BaseApi):
 
     def delete(self, contact_id: int) -> requests.Response:
         """Delete contact."""
-        return self.delete(str(contact_id))
+        return super().delete(str(contact_id))
 
     def search(self, query: str) -> requests.Response:
         """Search contacts by name/email/phone."""

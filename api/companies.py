@@ -58,7 +58,7 @@ class CompaniesApi(BaseApi):
 
     def delete(self, company_id: int) -> requests.Response:
         """Delete company."""
-        return self.delete(str(company_id))
+        return super().delete(str(company_id))
 
     def search(self, query: str) -> requests.Response:
         """Search companies by name/website."""
