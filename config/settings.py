@@ -1,6 +1,15 @@
 import os
 
-BASE_URL = os.getenv("BASE_URL", "https://www.amocrm.ru")
+AMOCRM_SUBDOMAIN = os.getenv("AMOCRM_SUBDOMAIN", "test")
+AMOCRM_API_BASE = f"https://{AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4"
+AMOCRM_OAUTH_URL = f"https://{AMOCRM_SUBDOMAIN}.amocrm.ru/oauth2"
+
+CLIENT_ID = os.getenv("CLIENT_ID", "")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
+REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8080/callback")
+
+AMOCRM_LONG_TOKEN = os.getenv("AMOCRM_LONG_TOKEN", "")
+
 DB_DSN = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/amocrm")
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "localhost:9092").split(",")
 K8S_NAMESPACE = os.getenv("K8S_NAMESPACE", "default")
@@ -16,10 +25,6 @@ LOAD_THRESHOLDS = {
 }
 
 TEST_USERS = {
-    "admin": {"email": "admin@amocrm.ru", "password": "Admin123!"},
-    "user": {"email": "user@amocrm.ru", "password": "User123!"},
-    "viewer": {"email": "viewer@amocrm.ru", "password": "Viewer123!"},
+    "admin": {"email": "admin@test.com", "password": "Admin123!"},
+    "user": {"email": "user@test.com", "password": "User123!"},
 }
-
-AMOCRM_API_BASE = "https://www.amocrm.ru/api"
-AMOCRM_ACCOUNTS_API = "https://accounts.amocrm.ru"

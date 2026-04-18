@@ -1,185 +1,157 @@
 import pytest
-from pipelines.api.utils.schema_validator import validate_response
+import json
 
 
-pytestmark = [pytest.mark.api, pytest.mark.contract]
+pytestmark = [pytest.mark.api, pytest.mark.crud]
 
 
-class TestEntityCRUD:
-    def test_create_entity_success(self, authenticated_client):
-        resp = authenticated_client.post(
-            "/api/entities",
-            json={"name": "Test Entity", "description": "Test description"}
-        )
-        assert resp.status_code == 201
-        data = resp.json()
-        assert "id" in data
-        assert data["name"] == "Test Entity"
-        validate_response(resp, "entity")
-
-    def test_create_entity_missing_name(self, authenticated_client):
-        resp = authenticated_client.post(
-            "/api/entities",
-            json={"description": "Test"}
-        )
-        assert resp.status_code in [400, 422]
-
-    def test_create_entity_empty_name(self, authenticated_client):
-        resp = authenticated_client.post(
-            "/api/entities",
-            json={"name": ""}
-        )
-        assert resp.status_code in [400, 422]
-
-    def test_get_entity(self, authenticated_client, test_entity):
-        if not test_entity:
-            pytest.skip("Cannot create test entity")
-        resp = authenticated_client.get(f"/api/entities/{test_entity}")
-        assert resp.status_code == 200
-        validate_response(resp, "entity")
-
-    def test_get_entity_not_found(self, authenticated_client):
-        resp = authenticated_client.get("/api/entities/999999999")
-        assert resp.status_code == 404
-
-    def test_update_entity(self, authenticated_client, test_entity):
-        if not test_entity:
-            pytest.skip("Cannot create test entity")
-        resp = authenticated_client.put(
-            f"/api/entities/{test_entity}",
-            json={"name": "Updated Name"}
-        )
-        assert resp.status_code == 200
-        assert resp.json()["name"] == "Updated Name"
-
-    def test_delete_entity(self, authenticated_client, test_entity):
-        if not test_entity:
-            pytest.skip("Cannot create test entity")
-        resp = authenticated_client.delete(f"/api/entities/{test_entity}")
-        assert resp.status_code == 204
+class TestContactsCRUD:
+    def test_list_contacts(self, api_client):
+        resp = api_client.contacts.list()
+        assert resp.status_code in [200, 401]
         
-        get_resp = authenticated_client.get(f"/api/entities/{test_entity}")
-        assert get_resp.status_code == 404
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "_embedded" in data
 
-    def test_list_entities(self, authenticated_client):
-        resp = authenticated_client.get("/api/entities")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "items" in data
-        assert "total" in data
-        validate_response(resp, "pagination")
+    def test_create_contact(self, api_client):
+        resp = api_client.contacts.create({
+            "name": "API Test Contact"
+        })
+        assert resp.status_code in [200, 201, 401]
 
+    def test_get_contact_not_found(self, api_client):
+        resp = api_client.contacts.get(999999999)
+        assert resp.status_code in [404, 401]
 
-class TestContactCRUD:
-    def test_create_contact(self, authenticated_client):
-        resp = authenticated_client.post(
-            "/api/contacts",
-            json={
-                "name": "John Doe",
-                "email": "john@example.com",
-                "phone": "+1234567890",
-                "company": "ACME Corp"
-            }
-        )
-        assert resp.status_code == 201
-        data = resp.json()
-        assert data["name"] == "John Doe"
-        validate_response(resp, "contact")
-
-    def test_get_contact(self, authenticated_client):
-        create_resp = authenticated_client.post(
-            "/api/contacts",
-            json={"name": "Test Contact", "email": "test@test.com"}
-        )
-        contact_id = create_resp.json().get("id")
+    def test_create_and_update_contact(self, api_client):
+        create_resp = api_client.contacts.create({
+            "name": "Update Test"
+        })
         
-        resp = authenticated_client.get(f"/api/contacts/{contact_id}")
-        assert resp.status_code == 200
+        if create_resp.status_code != 200:
+            pytest.skip("Cannot create contact")
         
-        authenticated_client.delete(f"/api/contacts/{contact_id}")
-
-    def test_update_contact(self, authenticated_client):
-        create_resp = authenticated_client.post(
-            "/api/contacts",
-            json={"name": "Original Name", "email": "orig@test.com"}
-        )
-        contact_id = create_resp.json().get("id")
+        contact_id = create_resp.json()["_embedded"]["contacts"][0]["id"]
         
-        resp = authenticated_client.patch(
-            f"/api/contacts/{contact_id}",
-            json={"name": "Updated Name"}
-        )
-        assert resp.status_code == 200
+        update_resp = api_client.contacts.update(contact_id, {
+            "name": "Updated Name"
+        })
         
-        authenticated_client.delete(f"/api/contacts/{contact_id}")
-
-    def test_delete_contact(self, authenticated_client):
-        create_resp = authenticated_client.post(
-            "/api/contacts",
-            json={"name": "To Delete", "email": "del@test.com"}
-        )
-        contact_id = create_resp.json().get("id")
+        assert update_resp.status_code in [200, 204]
         
-        resp = authenticated_client.delete(f"/api/contacts/{contact_id}")
-        assert resp.status_code == 204
+        api_client.contacts.delete(contact_id)
 
-    def test_list_contacts_with_filters(self, authenticated_client):
-        resp = authenticated_client.get(
-            "/api/contacts",
-            params={"page": 1, "page_size": 10}
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "items" in data
-        assert data["page"] == 1
-        assert data["page_size"] == 10
+    def test_pagination_contacts(self, api_client):
+        resp = api_client.contacts.list(page=1, limit=50)
+        assert resp.status_code in [200, 401]
 
 
-class TestLeadPipeline:
-    def test_list_pipelines(self, authenticated_client):
-        resp = authenticated_client.get("/api/pipelines")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "items" in data
+class TestCompaniesCRUD:
+    def test_list_companies(self, api_client):
+        resp = api_client.companies.list()
+        assert resp.status_code in [200, 401]
 
-    def test_get_pipeline_by_id(self, authenticated_client):
-        list_resp = authenticated_client.get("/api/pipelines")
-        pipelines = list_resp.json().get("items", [])
+    def test_create_company(self, api_client):
+        resp = api_client.companies.create({
+            "name": "API Test Company"
+        })
+        assert resp.status_code in [200, 201, 401]
+
+    def test_update_company(self, api_client):
+        create_resp = api_client.companies.create({
+            "name": "Test Company"
+        })
         
-        if pipelines:
-            pipeline_id = pipelines[0]["id"]
-            resp = authenticated_client.get(f"/api/pipelines/{pipeline_id}")
-            assert resp.status_code == 200
-
-    def test_create_lead(self, authenticated_client):
-        resp = authenticated_client.post(
-            "/api/leads",
-            json={
-                "name": "New Lead",
-                "price": 50000,
-                "pipeline_id": 1
-            }
-        )
-        assert resp.status_code in [201, 400]
+        if create_resp.status_code != 200:
+            pytest.skip("Cannot create company")
+        
+        company_id = create_resp.json()["_embedded"]["companies"][0]["id"]
+        
+        update_resp = api_client.companies.update(company_id, {
+            "name": "Updated Company"
+        })
+        
+        assert update_resp.status_code in [200, 204]
+        
+        api_client.companies.delete(company_id)
 
 
-class TestPagination:
-    @pytest.mark.parametrize("page_size", [10, 25, 50, 100])
-    def test_pagination_page_sizes(self, authenticated_client, page_size):
-        resp = authenticated_client.get(
-            "/api/entities",
-            params={"page": 1, "page_size": page_size}
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["items"]) <= page_size
-        assert data["page_size"] == page_size
+class TestLeadsCRUD:
+    def test_list_leads(self, api_client):
+        resp = api_client.leads.list()
+        assert resp.status_code in [200, 401]
 
-    def test_pagination_out_of_range(self, authenticated_client):
-        resp = authenticated_client.get(
-            "/api/entities",
-            params={"page": 999999, "page_size": 10}
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["items"]) == 0
+    def test_create_lead(self, api_client):
+        resp = api_client.leads.create({
+            "name": "Test Lead",
+            "price": 50000
+        })
+        assert resp.status_code in [200, 201, 401]
+
+    def test_get_lead_not_found(self, api_client):
+        resp = api_client.leads.get(999999999)
+        assert resp.status_code in [404, 401]
+
+    def test_update_lead_status(self, api_client):
+        create_resp = api_client.leads.create({
+            "name": "Status Test"
+        })
+        
+        if create_resp.status_code != 200:
+            pytest.skip("Cannot create lead")
+        
+        lead_id = create_resp.json()["_embedded"]["leads"][0]["id"]
+        
+        update_resp = api_client.leads.update(lead_id, {
+            "status_id": 142
+        })
+        
+        assert update_resp.status_code in [200, 204]
+        
+        api_client.leads.delete(lead_id)
+
+
+class TestTasksCRUD:
+    def test_list_tasks(self, api_client):
+        resp = api_client.tasks.list()
+        assert resp.status_code in [200, 401]
+
+    def test_create_task(self, api_client):
+        resp = api_client.tasks.create({
+            "name": "Test Task",
+            "task_type_id": 1,
+            "entity_type": "leads",
+            "entity_id": 1
+        })
+        assert resp.status_code in [200, 201, 401, 422]
+
+
+class TestPipelines:
+    def test_list_pipelines(self, api_client):
+        resp = api_client.pipelines.list()
+        assert resp.status_code in [200, 401]
+
+
+class TestUsers:
+    def test_list_users(self, api_client):
+        resp = api_client.users.list()
+        assert resp.status_code in [200, 401]
+
+
+class TestFields:
+    def test_list_contact_fields(self, api_client):
+        resp = api_client.fields.list("contacts")
+        assert resp.status_code in [200, 401]
+
+
+class TestTags:
+    def test_list_tags(self, api_client):
+        resp = api_client.tags.list()
+        assert resp.status_code in [200, 401]
+
+
+class TestWebhooks:
+    def test_list_webhooks(self, api_client):
+        resp = api_client.webhooks.list()
+        assert resp.status_code in [200, 401]

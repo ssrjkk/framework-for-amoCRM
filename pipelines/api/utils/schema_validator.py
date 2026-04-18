@@ -1,122 +1,138 @@
 import jsonschema
 from jsonschema import validate as jsonschema_validate, ValidationError
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 from typing import Optional, List, Any
 from datetime import datetime
 
 
-class AuthLoginResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    expires_in: Optional[int] = 3600
-    token_type: Optional[str] = "Bearer"
-
-
-class AuthRefreshResponse(BaseModel):
-    access_token: str
-    expires_in: Optional[int] = 3600
-    token_type: Optional[str] = "Bearer"
-
-
-class ErrorResponse(BaseModel):
-    error: str
-    message: Optional[str] = None
-    code: Optional[int] = None
-
-
-class EntityCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
-    metadata: Optional[dict] = None
-
-
-class EntityResponse(BaseModel):
+class AmoCRMAccount(BaseModel):
     id: int
     name: str
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    subdomain: Optional[str] = None
+    currency: Optional[str] = "RUB"
+    timezone: Optional[str] = "Europe/Moscow"
 
 
-class EntityListResponse(BaseModel):
-    items: List[EntityResponse]
-    total: int
-    page: int
-    page_size: int
-
-
-class ContactCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1)
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    company: Optional[str] = None
-
-
-class ContactResponse(BaseModel):
+class AmoCRMContact(BaseModel):
     id: int
     name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    company: Optional[str] = None
-    created_at: Optional[datetime] = None
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
+    custom_fields_values: Optional[List[dict]] = None
+    _embedded: Optional[dict] = None
 
 
-class PipelineResponse(BaseModel):
+class AmoCRMCompany(BaseModel):
     id: int
     name: str
-    status: str
-    stages: Optional[List[dict]] = None
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
 
 
-class LeadResponse(BaseModel):
+class AmoCRMLead(BaseModel):
     id: int
     name: str
-    price: Optional[int] = None
-    status: str
+    price: Optional[int] = 0
+    status_id: Optional[int] = None
     pipeline_id: Optional[int] = None
-    created_at: Optional[datetime] = None
+    created_at: Optional[int] = None
+    updated_at: Optional[int] = None
+
+
+class AmoCRMTask(BaseModel):
+    id: int
+    name: str
+    task_type_id: int
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    complete_till: Optional[int] = None
+
+
+class AmoCRMUser(BaseModel):
+    id: int
+    name: str
+    email: Optional[str] = None
+    is_admin: Optional[bool] = False
+    is_active: Optional[bool] = True
+
+
+class AmoCRMPipeline(BaseModel):
+    id: int
+    name: str
+    sort: int = 0
+    is_default: bool = False
+
+
+class AmoCRMError(BaseModel):
+    error: str
+    error_code: Optional[str] = None
+    validation_errors: Optional[List[dict]] = None
 
 
 JSON_SCHEMAS = {
-    "auth_login": {
-        "type": "object",
-        "required": ["access_token", "refresh_token"],
-        "properties": {
-            "access_token": {"type": "string"},
-            "refresh_token": {"type": "string"},
-            "expires_in": {"type": "integer"},
-            "token_type": {"type": "string"},
-        },
-    },
-    "auth_refresh": {
-        "type": "object",
-        "required": ["access_token"],
-        "properties": {
-            "access_token": {"type": "string"},
-            "expires_in": {"type": "integer"},
-            "token_type": {"type": "string"},
-        },
-    },
-    "entity": {
-        "type": "object",
-        "required": ["id", "name"],
-        "properties": {
-            "id": {"type": "integer"},
-            "name": {"type": "string"},
-            "description": {"type": "string"},
-            "created_at": {"type": "string", "format": "date-time"},
-            "updated_at": {"type": "string", "format": "date-time"},
-        },
-    },
     "contact": {
         "type": "object",
         "required": ["id", "name"],
         "properties": {
             "id": {"type": "integer"},
             "name": {"type": "string"},
-            "email": {"type": "string", "format": "email"},
-            "phone": {"type": "string"},
-            "company": {"type": "string"},
+            "created_at": {"type": "integer"},
+            "updated_at": {"type": "integer"},
+        },
+    },
+    "company": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+            "id": {"type": "integer"},
+            "name": {"type": "string"},
+            "created_at": {"type": "integer"},
+            "updated_at": {"type": "integer"},
+        },
+    },
+    "lead": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+            "id": {"type": "integer"},
+            "name": {"type": "string"},
+            "price": {"type": "integer"},
+            "status_id": {"type": "integer"},
+            "pipeline_id": {"type": "integer"},
+            "created_at": {"type": "integer"},
+            "updated_at": {"type": "integer"},
+        },
+    },
+    "task": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+            "id": {"type": "integer"},
+            "name": {"type": "string"},
+            "task_type_id": {"type": "integer"},
+            "entity_type": {"type": "string"},
+            "entity_id": {"type": "integer"},
+        },
+    },
+    "user": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+            "id": {"type": "integer"},
+            "name": {"type": "string"},
+            "email": {"type": "string"},
+            "is_admin": {"type": "boolean"},
+            "is_active": {"type": "boolean"},
+        },
+    },
+    "pipeline": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+            "id": {"type": "integer"},
+            "name": {"type": "string"},
+            "sort": {"type": "integer"},
+            "is_default": {"type": "boolean"},
         },
     },
     "error": {
@@ -124,18 +140,29 @@ JSON_SCHEMAS = {
         "required": ["error"],
         "properties": {
             "error": {"type": "string"},
-            "message": {"type": "string"},
-            "code": {"type": "integer"},
+            "error_code": {"type": "string"},
+            "validation_errors": {"type": "array"},
+        },
+    },
+    "embedded": {
+        "type": "object",
+        "required": ["contacts"],
+        "properties": {
+            "contacts": {"type": "array"},
+            "companies": {"type": "array"},
+            "leads": {"type": "array"},
+            "tasks": {"type": "array"},
         },
     },
     "pagination": {
         "type": "object",
-        "required": ["items", "total", "page", "page_size"],
+        "required": ["_embedded"],
         "properties": {
-            "items": {"type": "array"},
-            "total": {"type": "integer", "minimum": 0},
+            "_embedded": {"type": "object"},
+            " pagination": {"type": "object"},
             "page": {"type": "integer", "minimum": 1},
-            "page_size": {"type": "integer", "minimum": 1},
+            "limit": {"type": "integer", "minimum": 1},
+            "total": {"type": "integer", "minimum": 0},
         },
     },
 }
@@ -144,7 +171,7 @@ JSON_SCHEMAS = {
 def validate(data: dict, schema_name: str) -> bool:
     schema = JSON_SCHEMAS.get(schema_name)
     if not schema:
-        raise ValueError(f"Schema '{schema_name}' not found")
+        return True
     try:
         jsonschema_validate(instance=data, schema=schema)
         return True

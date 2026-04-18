@@ -1,7 +1,7 @@
 import pytest
 import os
-from pipelines.api.utils.http_client import APIClient
-from config.settings import BASE_URL
+from pipelines.api.utils.http_client import AmoCRMClient
+from config.settings import AMOCRM_LONG_TOKEN, CLIENT_ID, CLIENT_SECRET, AMOCRM_SUBDOMAIN
 
 
 def pytest_configure(config):
@@ -12,48 +12,68 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def api_client():
-    return APIClient(base_url=BASE_URL)
+    token = os.getenv("AMOCRM_LONG_TOKEN", AMOCRM_LONG_TOKEN)
+    return AmoCRMClient(long_token=token)
 
 
 @pytest.fixture(scope="session")
 def api_token(api_client):
-    email = os.getenv("AMO_TEST_EMAIL", "test@example.com")
-    password = os.getenv("AMO_TEST_PASSWORD", "TestPass123!")
-    resp = api_client.auth_login(email, password)
-    if resp.status_code == 200:
-        return resp.json().get("access_token")
-    pytest.skip(f"Cannot obtain token: {resp.status_code}")
+    if not api_client.access_token:
+        pytest.skip("No LONG_TOKEN configured")
+    return api_client.access_token
 
 
 @pytest.fixture(scope="session")
-def authenticated_client(api_client, api_token):
-    api_client.set_token(api_token)
+def authenticated_client(api_client):
+    if not api_client.access_token:
+        pytest.skip("No LONG_TOKEN configured")
     return api_client
 
 
 @pytest.fixture(scope="function")
-def test_entity(authenticated_client):
-    resp = authenticated_client.post("/entities", json={"name": "test_entity"})
-    if resp.status_code != 201:
+def test_contact(authenticated_client):
+    resp = authenticated_client.contacts.create({
+        "name": "Test Contact",
+        "custom_fields_values": [
+            {"field_id": 1, "values": [{"value": "test@test.com"}]}
+        ]}
+    })
+    
+    if resp.status_code != 200:
         yield None
     else:
-        entity_id = resp.json().get("id")
-        yield entity_id
+        contact_id = resp.json()["_embedded"]["contacts"][0]["id"]
+        yield contact_id
         try:
-            authenticated_client.delete(f"/entities/{entity_id}")
+            authenticated_client.contacts.delete(contact_id)
+        except:
+            pass
+
+
+@pytest.fixture(scope="function")
+def test_lead(authenticated_client):
+    resp = authenticated_client.leads.create({
+        "name": "Test Lead",
+        "price": 10000,
+    })
+    
+    if resp.status_code != 200:
+        yield None
+    else:
+        lead_id = resp.json()["_embedded"]["leads"][0]["id"]
+        yield lead_id
+        try:
+            authenticated_client.leads.delete(lead_id)
         except:
             pass
 
 
 @pytest.fixture(scope="session")
-def api_base_url():
-    return BASE_URL
+def account(authenticated_client):
+    return authenticated_client.account.get()
 
 
 @pytest.fixture(scope="session")
-def test_users():
-    return {
-        "admin": {"email": "admin@test.com", "password": "Admin123!", "role": "admin"},
-        "user": {"email": "user@test.com", "password": "User123!", "role": "user"},
-        "viewer": {"email": "viewer@test.com", "password": "Viewer123!", "role": "viewer"},
-    }
+def api_base_url():
+    from config.settings import AMOCRM_API_BASE
+    return AMOCRM_API_BASE
