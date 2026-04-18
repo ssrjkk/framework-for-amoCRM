@@ -1,0 +1,77 @@
+name: UI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["pipelines/ui/**", "requirements.txt", "pytest.ini"]
+  pull_request:
+    paths: ["pipelines/ui/**", "requirements.txt", "pytest.ini"]
+  workflow_dispatch:
+
+jobs:
+  ui-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install --with-deps chromium
+          playwright install-deps
+
+      - name: Run UI tests
+        env:
+          BASE_URL: ${{ secrets.UI_BASE_URL }}
+        run: |
+          pytest pipelines/ui/ -m ui -v \
+            --alluredir=reports/allure-results \
+            -n auto \
+            --tb=short
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-allure-results
+          path: reports/allure-results/
+          retention-days: 30
+
+  ui-critical:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright
+        run: |
+          playwright install --with-deps chromium
+
+      - name: Run critical UI tests
+        env:
+          BASE_URL: ${{ secrets.UI_BASE_URL }}
+        run: |
+          pytest pipelines/ui/ -m critical -v \
+            --alluredir=reports/critical-results \
+            --tb=short
+
+      - name: Upload critical results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-critical-results
+          path: reports/critical-results/

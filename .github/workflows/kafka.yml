@@ -1,0 +1,87 @@
+name: Kafka Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["pipelines/kafka/**", "requirements.txt", "pytest.ini"]
+  pull_request:
+    paths: ["pipelines/kafka/**", "requirements.txt", "pytest.ini"]
+  workflow_dispatch:
+
+jobs:
+  kafka-tests:
+    runs-on: ubuntu-latest
+    services:
+      zookeeper:
+        image: confluentinc/cp-zookeeper:7.5.0
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+        ports:
+          - 2181:2181
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+        ports:
+          - 9092:9092
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Wait for Kafka
+        run: sleep 15
+
+      - name: Run Kafka tests
+        env:
+          KAFKA_BROKERS: localhost:9092
+        run: |
+          pytest pipelines/kafka/ -m kafka -v \
+            --alluredir=reports/allure-results \
+            -n auto \
+            --tb=short
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kafka-allure-results
+          path: reports/allure-results/
+          retention-days: 30
+
+  kafka-dlq-tests:
+    runs-on: ubuntu-latest
+    services:
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+        ports:
+          - 9092:9092
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: sleep 10
+      - name: Run DLQ tests
+        run: |
+          pytest pipelines/kafka/ -m dlq -v \
+            --alluredir=reports/dlq-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kafka-dlq-results
+          path: reports/dlq-results/

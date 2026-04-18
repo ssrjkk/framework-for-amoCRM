@@ -1,0 +1,74 @@
+name: Load Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths: ["pipelines/load/**", "requirements.txt"]
+  schedule:
+    - cron: "0 22 * * 5"
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Virtual users"
+        default: "50"
+        required: true
+      duration:
+        description: "Duration (seconds)"
+        default: "120"
+        required: true
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Locust
+        run: pip install locust
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Run load test
+        run: |
+          locust -f pipelines/load/locustfile.py \
+            --headless \
+            --users ${{ github.event.inputs.users || '50' }} \
+            --spawn-rate 10 \
+            --run-time ${{ github.event.inputs.duration || '120' }}s \
+            --host ${{ secrets.LOAD_TARGET_URL }} \
+            --html reports/load-report.html \
+            --csv reports/load
+
+      - name: Check thresholds
+        run: |
+          python -c "
+          import csv
+          import sys
+          with open('reports/load_stats_stats.csv') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  if row['Name'] == 'Aggregated':
+                      error_rate = float(row['Failure rate'])
+                      rps = float(row['Requests/s'])
+                      print(f'Error rate: {error_rate}')
+                      print(f'RPS: {rps}')
+                      if error_rate > 1.0:
+                          print('ERROR: Error rate > 1%')
+                          sys.exit(1)
+                      if rps < 10:
+                          print('WARNING: RPS < 10')
+          "
+
+      - name: Upload load reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-reports
+          path: reports/
+          retention-days: 30

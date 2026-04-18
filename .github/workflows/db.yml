@@ -1,0 +1,91 @@
+name: DB Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["pipelines/db/**", "requirements.txt", "pytest.ini"]
+  pull_request:
+    paths: ["pipelines/db/**", "requirements.txt", "pytest.ini"]
+  workflow_dispatch:
+
+jobs:
+  db-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: amocrm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run DB tests
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/amocrm
+        run: |
+          pytest pipelines/db/ -m db -v \
+            --alluredir=reports/allure-results \
+            -n auto \
+            --tb=short
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: db-allure-results
+          path: reports/allure-results/
+          retention-days: 30
+
+  db-integrity-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: amocrm
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run integrity tests
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/amocrm
+        run: |
+          pytest pipelines/db/ -m integrity -v \
+            --alluredir=reports/integrity-results \
+            -n auto
+
+      - name: Upload integrity results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: db-integrity-results
+          path: reports/integrity-results/

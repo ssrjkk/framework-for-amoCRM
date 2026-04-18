@@ -1,0 +1,126 @@
+name: All Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+env:
+  BASE_URL: ${{ secrets.BASE_URL }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  KAFKA_BROKERS: ${{ secrets.KAFKA_BROKERS }}
+  KIBANA_URL: ${{ secrets.KIBANA_URL }}
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest pipelines/api/ -m api -v --alluredir=reports/api -n auto
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-results
+          path: reports/api/
+
+  db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: amocrm
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest pipelines/db/ -m db -v --alluredir=reports/db -n auto
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: db-results
+          path: reports/db/
+
+  kafka:
+    runs-on: ubuntu-latest
+    services:
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+        ports:
+          - 9092:9092
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: sleep 10
+      - run: pytest pipelines/kafka/ -m kafka -v --alluredir=reports/kafka -n auto
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kafka-results
+          path: reports/kafka/
+
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: playwright install --with-deps chromium
+      - run: pytest pipelines/ui/ -m ui -v --alluredir=reports/ui -n auto
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-results
+          path: reports/ui/
+
+  generate-report:
+    needs: [api, db, kafka, ui]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          path: reports/
+
+      - name: Install Allure
+        run: |
+          curl -sL https://get.allure.io/install.sh | bash
+          export PATH=$PATH:$ALLURE_HOME/bin
+
+      - name: Generate report
+        run: |
+          allure generate reports/ -o allure-report --quiet
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          destination_dir: allure

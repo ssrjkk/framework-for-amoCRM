@@ -1,0 +1,78 @@
+name: API Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ["pipelines/api/**", "requirements.txt", "pytest.ini"]
+  pull_request:
+    paths: ["pipelines/api/**", "requirements.txt", "pytest.ini"]
+  workflow_dispatch:
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run API tests
+        run: |
+          pytest pipelines/api/ -m api -v \
+            --alluredir=reports/allure-results \
+            -n auto \
+            --tb=short
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-allure-results
+          path: reports/allure-results/
+          retention-days: 30
+
+      - name: Generate Allure report
+        if: github.event_name == 'pull_request'
+        run: |
+          pip install allure-pytest
+          allure generate reports/allure-results -o reports/allure-report --quiet
+
+      - name: Upload Allure report
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-allure-report
+          path: reports/allure-report/
+          retention-days: 7
+
+  api-contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run contract tests
+        run: |
+          pytest pipelines/api/ -m contract -v \
+            --alluredir=reports/contract-results \
+            -n auto
+
+      - name: Upload contract results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-contract-results
+          path: reports/contract-results/

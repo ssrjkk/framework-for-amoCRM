@@ -1,0 +1,83 @@
+name: K8s Smoke Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      namespace:
+        description: "Kubernetes namespace"
+        default: "default"
+        required: true
+  push:
+    branches: [main]
+    paths: ["pipelines/k8s/**"]
+  repository_dispatch:
+
+jobs:
+  k8s-smoke:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" > $KUBECONFIG
+          chmod 600 $KUBECONFIG
+        env:
+          KUBECONFIG: /tmp/kubeconfig
+
+      - name: Run K8s smoke tests
+        env:
+          K8S_NAMESPACE: ${{ github.event.inputs.namespace || 'default' }}
+        run: |
+          pytest pipelines/k8s/ -m smoke -v \
+            --alluredir=reports/allure-results \
+            -n auto \
+            --tb=short
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k8s-smoke-results
+          path: reports/allure-results/
+          retention-days: 7
+
+  k8s-health:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" > $KUBECONFIG
+
+      - name: Run health tests
+        run: |
+          pytest pipelines/k8s/ -m health -v \
+            --alluredir=reports/health-results \
+            -n auto
+
+      - name: Upload health results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k8s-health-results
+          path: reports/health-results/
