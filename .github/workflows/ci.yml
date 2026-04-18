@@ -43,11 +43,28 @@ jobs:
           pip install -r requirements.txt
           pip install ruff mypy
 
+      - name: Cache ruff
+        uses: actions/cache@v4
+        with:
+          path: .ruff_cache
+          key: ruff-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ruff-${{ runner.os }}-
+
       - name: Run Ruff
         run: ruff check . --output-format=github
 
       - name: Run MyPy
-        run: mypy api core config --ignore-missing-imports || true
+        run: mypy api core config --ignore-missing-imports
+        continue-on-error: true
+
+      - name: Cache mypy
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            mypy-${{ runner.os }}-
 
   # ============================================
 # UNIT TESTS
@@ -82,13 +99,22 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     needs: [lint, unit-tests]
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Cache pytest
+        uses: actions/cache@v4
+        with:
+          path: .pytest_cache
+          key: pytest-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            pytest-${{ runner.os }}-
 
       - name: Run smoke tests
         run: |
@@ -145,9 +171,9 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: amocrm_test
+          POSTGRES_USER: ${{ secrets.DB_USER || 'test' }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD || 'test' }}
+          POSTGRES_DB: ${{ secrets.DB_NAME || 'amocrm_test' }}
         ports:
           - 5432:5432
         options: >-
@@ -161,11 +187,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: Run DB tests
         run: |
           pip install -r requirements.txt
-          export DATABASE_URL=postgresql://test:test@localhost:5432/amocrm_test
+          export DATABASE_URL=postgresql://${{ secrets.DB_USER || 'test' }}:${{ secrets.DB_PASSWORD || 'test' }}@localhost:5432/${{ secrets.DB_NAME || 'amocrm_test' }}
           pytest pipelines/db/ -m db -v --alluredir=reports/allure-db -n auto
 
       - name: Upload results
@@ -223,7 +250,8 @@ jobs:
       - name: Run cross-browser tests
         run: |
           pip install -r requirements.txt
-          pytest pipelines/crossbrowser/ -m crossbrowser -v -n auto || true
+          pytest pipelines/crossbrowser/ -m crossbrowser -v -n auto
+        continue-on-error: true
 
   # ============================================
   # KAFKA TESTS
@@ -252,7 +280,17 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Wait for Kafka
-        run: sleep 15
+        run: |
+          for i in {1..30}; do
+            if docker-compose exec -T kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; then
+              echo "Kafka is ready"
+              exit 0
+            fi
+            echo "Waiting for Kafka... ($i/30)"
+            sleep 2
+          done
+          echo "Kafka failed to start"
+          exit 1
 
       - name: Run Kafka tests
         run: |
@@ -339,6 +377,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: reports/
+          merge-multiple: true
+
+      - name: Consolidate Allure results
+        run: |
+          mkdir -p reports/allure-results
+          find reports -name "*.json" -type f -exec mv {} reports/allure-results/ \; 2>/dev/null || true
 
       - name: Install Allure
         run: |
@@ -347,7 +391,7 @@ jobs:
 
       - name: Generate report
         run: |
-          allure generate reports/ -o allure-report --quiet
+          allure generate reports/allure-results -o allure-report --quiet
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
