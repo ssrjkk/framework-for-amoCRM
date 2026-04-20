@@ -1,4 +1,4 @@
-# QA Automation Framework для amoCRM
+# Framework для amoCRM
 
 Enterprise-grade фреймворк автоматизации тестирования | 135+ тестов | 99.2% стабильность | 8 типов тестов
 
