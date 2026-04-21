@@ -1,0 +1,19 @@
+# CODEOWNERS — автоматическое ревью от владельцев
+
+# Default owners for everything
+*       @ssrjkk
+
+# DevOps / CI/CD
+.github/workflows/*     @ssrjkk
+
+# API layer
+api/                        @ssrjkk
+core/                      @ssrjkk
+
+# Pipelines
+pipelines/                 @ssrjkk
+
+# Docker / Infra
+Dockerfile                 @ssrjkk
+docker/                   @ssrjkk
+infra/                    @ssrjkk
