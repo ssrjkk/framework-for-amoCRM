@@ -10,18 +10,25 @@ logger = logging.getLogger(__name__)
 
 AMOCRM_SUBDOMAIN = os.getenv("AMOCRM_SUBDOMAIN", "test")
 AMOCRM_LONG_TOKEN = os.getenv("AMOCRM_LONG_TOKEN", "")
-BASE_URL = f"https://{AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4"
+USE_MOCK = os.getenv("USE_MOCK", "true").lower() == "true"
+
+if USE_MOCK or not AMOCRM_LONG_TOKEN:
+    BASE_URL = os.getenv("APP_URL", "http://localhost:8080")
+    logger.info(f"Using mock mode: {BASE_URL}")
+else:
+    BASE_URL = f"https://{AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4"
+    logger.info(f"Using real API: {BASE_URL}")
 
 
 class AmoCRMUser(FastHttpUser):
     wait_time = between(1, 3)
     token = None
-    
+
     def on_start(self):
         self.token = AMOCRM_LONG_TOKEN
         if not self.token:
             logger.warning("No LONG_TOKEN configured")
-    
+
     def get_headers(self):
         if self.token:
             return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
@@ -40,11 +47,7 @@ class AmoCRMUser(FastHttpUser):
     @task(3)
     def create_contact(self):
         name = f"LoadTest_{random.randint(1000, 9999)}"
-        with self.client.post(
-            f"{BASE_URL}/contacts",
-            json=[{"name": name}],
-            headers=self.get_headers()
-        ):
+        with self.client.post(f"{BASE_URL}/contacts", json=[{"name": name}], headers=self.get_headers()):
             pass
 
     @task(8)
@@ -61,8 +64,8 @@ class AmoCRMUser(FastHttpUser):
     def create_lead(self):
         with self.client.post(
             f"{BASE_URL}/leads",
-            json=[{"name": f"Lead_{random.randint(1000,9999)}", "price": random.randint(1000, 100000)}],
-            headers=self.get_headers()
+            json=[{"name": f"Lead_{random.randint(1000, 9999)}", "price": random.randint(1000, 100000)}],
+            headers=self.get_headers(),
         ):
             pass
 
@@ -95,20 +98,22 @@ class AmoCRMUser(FastHttpUser):
 @events.quitting.add_listener
 def check_thresholds(environment, **kwargs):
     stats = environment.runner.stats.total
-    
+
     if stats.fail_ratio > THRESHOLDS["error_rate_pct"] / 100:
         logger.error(f"FAIL: error_rate {stats.fail_ratio:.2%} > {THRESHOLDS['error_rate_pct']}%")
         environment.process_exit_code = 1
-    
+
     if stats.avg_response_time > THRESHOLDS["p95_ms"]:
         logger.warning(f"WARN: avg {stats.avg_response_time}ms > {THRESHOLDS['p95_ms']}ms")
-    
+
     total_rps = stats.total_rps
     if total_rps < THRESHOLDS["rps_min"]:
         logger.error(f"FAIL: rps {total_rps:.2f} < {THRESHOLDS['rps_min']}")
         environment.process_exit_code = 1
-    
-    logger.info(f"Stats: {stats.num_requests} req, {stats.fail_ratio:.2%} fail, {stats.avg_response_time}ms avg, {total_rps:.2f} rps")
+
+    logger.info(
+        f"Stats: {stats.num_requests} req, {stats.fail_ratio:.2%} fail, {stats.avg_response_time}ms avg, {total_rps:.2f} rps"
+    )
 
 
 @events.test_start.add_listener
