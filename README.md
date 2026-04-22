@@ -1,16 +1,14 @@
 # Framework для amoCRM
 
-![CI](https://github.com/ssrjkk/framework-for-amoCRM/actions/workflows/ci.yml/badge.svg)
-![Languages](https://img.shields.io/github/languages/top/ssrjkk/framework-for-amoCRM)
-![pytest](https://img.shields.io/badge/pytest-8.3-green?logo=pytest&logoColor=white)
-![Playwright](https://img.shields.io/badge/Playwright-1.45-green?logo=playwright&logoColor=white)
-![requests](https://img.shields.io/badge/requests-2.32-orange)
-![Pydantic](https://img.shields.io/badge/Pydantic-v2-red)
-![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/K8s-supported-blue?logo=kubernetes&logoColor=white)
-![Kafka](https://img.shields.io/badge/Kafka-event--driven-orange?logo=apachekafka&logoColor=white)
-![Allure](https://img.shields.io/badge/Allure-report-ff69b4)
-![License](https://img.shields.io/badge/license-MIT-yellow)
+> Enterprise-grade фреймворк автоматизации тестирования  
+> 🧪 135+ тестов | ⚡ 99.2% стабильность | 🔄 8 типов тестов | 🐍 Python 3.11+
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![pytest](https://img.shields.io/badge/pytest-8.0+-0A9EDC?logo=pytest&logoColor=white)](https://docs.pytest.org)
+[![Playwright](https://img.shields.io/badge/Playwright-1.40+-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev)
+[![CI/CD](https://github.com/ssrjkk/framework-for-amoCRM/actions/workflows/ci.yml/badge.svg)](https://github.com/ssrjkk/framework-for-amoCRM/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Allure Report](https://img.shields.io/badge/report-allure-00a0ff)](https://allurereport.org)
 
 Enterprise-grade фреймворк автоматизации тестирования | 135+ тестов | 99.2% стабильность | 8 типов тестов
 
