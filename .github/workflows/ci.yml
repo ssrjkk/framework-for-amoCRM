@@ -281,13 +281,8 @@ jobs:
     needs: [lint, unit-tests]
     if: false
     steps:
-      - name: Skip Kafka tests
-        run: echo "Kafka tests disabled - requires external cluster"
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
+      - name: Skip
+        run: echo "Kafka disabled"
 
       - uses: actions/setup-python@v6
         with:
