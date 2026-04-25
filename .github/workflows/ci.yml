@@ -451,7 +451,7 @@ jobs:
     name: Notify Results
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [lint, unit-tests, smoke-tests, api-tests, db-tests, ui-tests, kafka-tests, build]
+    needs: [lint, unit-tests, smoke-tests, api-tests, db-tests, ui-tests, kafka-tests]
     if: always()
     steps:
       - name: Get run summary
