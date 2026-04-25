@@ -1,7 +1,7 @@
 # Framework для amoCRM
 
 > Enterprise-grade фреймворк автоматизации тестирования  
-> 🧪 135+ тестов | ⚡ 99.2% стабильность | 🔄 8 типов тестов | 🐍 Python 3.11+
+> 🧪 50+ тестов | ⚡ Python 3.12 | 🔄 6 типов тестов
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![pytest](https://img.shields.io/badge/pytest-8.0+-0A9EDC?logo=pytest&logoColor=white)](https://docs.pytest.org)
@@ -13,27 +13,23 @@
 Enterprise-grade фреймворк автоматизации тестирования | 135+ тестов | 99.2% стабильность | 8 типов тестов
 
 ```
-+--------+     +--------+     +--------+     +--------+
-|  Lint  | --> | Unit   | --> | Smoke  | --> |  API   |
-+--------+     +--------+     +--------+     +--------+
++--------+     +--------+     +--------+
+|  Lint  | --> | Unit   | --> | Smoke  |
++--------+     +--------+     +--------+
                                              
-                                             
-+--------+     +--------+     +--------+     +--------+
-|   E2E  | <-- | Integ- | <-- |  DB    | <-- | Kafka  |
-|        |     | ration |     |        |     |        |
-+--------+     +--------+     +--------+     +--------+
++------------------+     +-------------+     +---------+
+|    API/DB/UI     | <-- | Integration | <-- |  E2E   |
++------------------+     +-------------+     +---------+
 ```
 
 ## Почему этот фреймворк
 
 | Метрика | Значение | Влияние |
 |---------|----------|---------|
-| Стабильность тестов | 99.2% | Нет флейки в продакшен CI |
-| Время прогона | 3 мин smoke / 15 мин full | Быстрый фидбек |
-| Покрытие | 135+ тестов | Защита критических путей |
-| Параллелизация | Auto-scaled (4 workers) | В 4 раза быстрее последовательного |
-| Обнаружение флейки | Auto-quarantine | Нет ложных срабатываний |
-| Наблюдаемость | Полная трассировка | 2 минуты на root cause |
+| Стабильность тестов | 95%+ | Нет флейки в продакшен CI |
+| Время прогона | 3 мин smoke / 10 мин full | Быстрый фидбек |
+| Покрытие | 50+ тестов | Защита критических путей |
+| Параллелизация | Auto-scaled (xdist) | Быстрее последовательного |
 
 ## Быстрый старт (5 минут)
 
@@ -66,59 +62,28 @@ AMOCRM_SUBDOMAIN=test
 
 ```
 amoCRM/
-├── core/                              # Ядро фреймворка
-│   ├── config.py                      # 12-factor конфиг (Pydantic v2)
-│   ├── logger.py                      # JSON структурированное логирование
-│   ├── resilience.py                  # Retry, circuit breaker, rate limiter
-│   └── exceptions.py                  # Кастомные исключения
+├── tests/                              # Unit тесты
+│   ├── test_smoke.py                   # Smoke тесты
+│   ├── test_contacts.py                 # Contacts CRUD
+│   ├── test_companies.py              # Companies CRUD
+│   ├── test_deals.py                 # Deals CRUD
+│   ├── test_users.py                 # Users API
+│   └── test_integration.py           # Интеграционные
 │
-├── pipelines/                         # Тестовые пайплайны (Page Object Model)
-│   ├── api/                           # API тесты
-│   │   ├── tests/                     # Тестовые сценарии
-│   │   ├── conftest.py                # Фикстуры (session-scoped)
-│   │   └── utils/
-│   │       ├── base_client.py         # BaseAPIClient с retry/circuit-breaker
-│   │       ├── http_client.py         # AmoCRM клиент
-│   │       └── schema_validator.py    # Валидация контрактов
-│   │
-│   ├── ui/                            # UI тесты (Playwright)
-│   │   ├── pages/                     # Page Objects
-│   │   │   ├── base.py                # BasePage с waiters/modals/forms
-│   │   │   └── home.py                # Реализации страниц
-│   │   ├── conftest.py                # Браузерные фикстуры
-│   │   └── tests/                     # E2E сценарии
-│   │
-│   ├── db/                            # Database тесты
-│   │   ├── tests/                     # Консистентность и целостность
-│   │   └── utils/                     # DB клиент с connection pooling
-│   │
-│   ├── kafka/                         # Event-driven тесты
-│   │   ├── tests/                     # Producer/consumer тесты
-│   │   └── utils/                     # Kafka клиент с DLQ
-│   │
-│   ├── load/                          # Нагрузочные тесты (Locust)
-│   │   ├── locustfile.py              # Сценарии нагрузки
-│   │   └── thresholds.py              # Пороговые значения
-│   │
-│   ├── k8s/                           # K8s smoke тесты
-│   ├── crossbrowser/                  # Selenium Grid (Chrome/Firefox/Edge)
-│   └── logs/                          # Анализ логов Kibana
+├── pipelines/                         # E2E пайплайны
+│   ├── api/                          # API тесты
+│   ├── ui/                           # UI тесты (Playwright)
+│   ├── db/                           # Database тесты
+│   ├── kafka/                        # Kafka event тесты
+│   ├── load/                         # Нагрузочные тесты
+│   ├── k8s/                          # K8s smoke тесты
+│   ├── crossbrowser/                # Cross-browser тесты
+│   └── logs/                         # Log analysis
 │
 ├── fixtures/                          # Фабрики тестовых данных
-│   └── data_factory.py                # Генераторы Contact, Company, Lead, Task
-│
-├── .github/workflows/                 # CI/CD
-│   └── ci.yml                         # Единый пайплайн с quality gates
-│
-├── docker/                            # Docker файлы
-│   └── Dockerfile.test                # Образ для запуска тестов
-│
-├── config/                            # Конфигурация
-│   └── settings.py                    # Настройки с env override
-│
-└── docs/                              # Документация
-    ├── adr/                           # Architecture Decision Records
-    └── runbooks/                      # Руководства по устранению неполадок
+├── .github/workflows/                # CI/CD
+├── config/                           # Конфигурация
+└── docs/                             # Документация
 ```
 
 ### Ключевые абстракции
@@ -184,11 +149,9 @@ E2E        : 10%
 | Уровень | Тестов | Когда запускается | Таймаут |
 |---------|--------|-------------------|---------|
 | Smoke | 15 | Каждый коммит | 3 мин |
-| Unit | 50 | Каждый PR | 5 мин |
-| API | 33 | Каждый PR | 10 мин |
-| Integration | 20 | Ежедневно + PR | 15 мин |
-| E2E | 12 | Перед релизом | 20 мин |
-| Load | 10 | Еженедельно + релиз | 30 мин |
+| Unit | 20 | Каждый PR | 5 мин |
+| API | 15 | Каждый PR | 10 мин |
+| Integration | 10 | Ежедневно + PR | 15 мин |
 
 ### Маркеры тестов
 
@@ -209,12 +172,12 @@ pytest -m "integration"   # Только интеграционные тесты
 ## CI/CD пайплайн
 
 ```
-Push to main --> Lint --> Unit --> Smoke --> API/DB/Kafka --> Integration --> E2E --> Report
+Push to main --> Lint --> Unit --> Smoke --> API/DB/UI --> Integration --> Deploy
                   |                                    |
                   v                                    v
-Pull Request  --> Lint --> Unit ------------------> API/DB --> Report
+Pull Request  --> Lint --> Unit ------------------> API/DB/UI --> Report
                                                       |
-Schedule      --> Lint --> Unit --> Smoke --> All ----> Report
+Schedule      --> Lint --> Unit --> Smoke -------------> Report
 ```
 
 ### Этапы пайплайна
@@ -222,12 +185,12 @@ Schedule      --> Lint --> Unit --> Smoke --> All ----> Report
 | Этап | Триггер | SLA | Артефакт | Gate |
 |------|---------|-----|----------|------|
 | Lint | Каждый push | 30с | ruff.json | Fail on error |
-| Unit | Каждый push | 5мин | coverage.xml | Coverage > 80% |
+| Unit | Каждый push | 5мин | coverage.xml | Coverage > 70% |
 | Smoke | Каждый push | 3мин | allure-results | 0 failures |
-| API (matrix) | Каждый PR | 10мин | allure-results | 0 failures |
-| Integration | Daily + PR | 15мин | allure-results | 0 failures |
-| E2E | Перед релизом | 20мин | video + screenshot | 0 failures |
-| Deploy | On main | - | Docker image | All gates passed |
+| API | Каждый PR | 10мин | allure-results | 0 failures |
+| DB | Каждый PR | 10мин | allure-results | 0 failures |
+| UI | Каждый PR | 10мин | allure-results | 0 failures |
+| Build | On main | 5мин | Docker image | Health check |
 
 ---
 
@@ -367,13 +330,13 @@ docs/adr/
 
 ```bash
 # Запустить только упавший тест
-pytest pipelines/api/tests/test_crud.py::TestContactsCRUD::test_create_contact -v
+pytest tests/test_contacts.py::test_create_contact -v
+
+# Запустить smoke тесты
+pytest tests/ -m smoke -v
 
 # Запустить с полным выводом
-pytest pipelines/ -k "test_name" -vv --capture=no
-
-# Запустить с отладочным логированием
-pytest pipelines/ -k "test_name" -vv -o log_cli=true -o log_cli_level=DEBUG
+pytest tests/ -k "test_name" -vv --capture=no
 ```
 
 #### Шаг 3: Проверить инфраструктуру
@@ -399,13 +362,11 @@ docker-compose logs -f kafka
 
 | Фича | Этот фреймворк | Типичный репо |
 |------|----------------|---------------|
-| Архитектура | Слоистая с DI | Монолит |
-| Стабильность | 99.2% (auto-retry + circuit breaker) | ~85% |
-| Наблюдаемость | JSON логи + correlation ID | Print statements |
-| CI/CD | Quality gates + matrix | Один этап |
-| Управление данными | Factory паттерн | Hardcoded |
-| Параллелизация | Auto-balanced (xdist) | Последовательно |
-| Документация | ADR + Runbooks | Только README |
+| Архитектура | Unit + E2E pipelines | Только E2E |
+| Стабильность | 95%+ (xdist parallel) | ~85% |
+| CI/CD | Quality gates | Один этап |
+| Параллелизация | Auto (xdist) | Последовательно |
+| Наблюдаемость | Allure reports | Print statements |
 
 ---
 
