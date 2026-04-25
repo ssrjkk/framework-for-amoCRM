@@ -7,17 +7,6 @@ on:
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
-    inputs:
-      test_type:
-        description: 'Test type to run'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - smoke
-          - critical
-          - regression
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,9 +17,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  # ============================================
-  # LINT & CODE QUALITY
-  # ============================================
   lint:
     name: Lint & Code Quality
     runs-on: ubuntu-latest
@@ -39,70 +25,46 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-
       - name: Install lint deps
         run: pip install ruff mypy
-
       - name: Cache ruff
         uses: actions/cache@v5
         with:
           path: .ruff_cache
           key: ruff-${{ runner.os }}-${{ hashFiles('requirements.txt', '**/*.py') }}
-          restore-keys: |
-            ruff-${{ runner.os }}-
-
       - name: Run Ruff
         run: ruff check . --output-format=github
-
       - name: Run MyPy
         run: mypy api core config --ignore-missing-imports || true
         continue-on-error: true
 
-      - name: Cache mypy
-        uses: actions/cache@v5
-        with:
-          path: .mypy_cache
-          key: mypy-${{ runner.os }}-${{ hashFiles('requirements.txt', '**/*.py') }}
-          restore-keys: |
-            mypy-${{ runner.os }}-
-
-  # ============================================
-  # UNIT TESTS
-  # ============================================
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: [lint]
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Run unit tests
         run: pytest tests/ -v --cov --cov-report=xml --cov-fail-under=70 -m "not integration" -n auto --maxfail=5
-
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.xml
 
-  # ============================================
-  # SMOKE TESTS (Fast feedback)
-  # ============================================
   smoke-tests:
     name: Smoke Tests
     runs-on: ubuntu-latest
@@ -113,49 +75,37 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-
       - name: Cache pytest
         uses: actions/cache@v5
         with:
           path: .pytest_cache
           key: pytest-${{ runner.os }}-${{ hashFiles('requirements.txt', 'tests/**/*.py') }}
-          restore-keys: |
-            pytest-${{ runner.os }}-
-
       - name: Run smoke tests
         run: |
           pip install -r requirements.txt
           pytest tests/ -m smoke -v --tb=short -n auto --maxfail=5
 
-  # ============================================
-  # API TESTS
-  # ============================================
   api-tests:
     name: API Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [lint, unit-tests]
+    needs: [unit-tests]
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Run API tests
         run: pytest pipelines/api/tests/ -v --alluredir=reports/allure-api -n auto --tb=short --maxfail=3
-
       - name: Upload Allure results
         uses: actions/upload-artifact@v4
         if: always()
@@ -164,14 +114,11 @@ jobs:
           path: reports/allure-api/
           retention-days: 7
 
-  # ============================================
-  # DATABASE TESTS
-  # ============================================
   db-tests:
     name: Database Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [lint, unit-tests]
+    needs: [unit-tests]
     services:
       postgres:
         image: postgres:15-alpine
@@ -181,28 +128,21 @@ jobs:
           POSTGRES_DB: amocrm_test
         ports:
           - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-
       - name: Run DB tests
         run: |
           pip install -r requirements.txt
           export DATABASE_URL=postgresql://test:test@localhost:5432/amocrm_test
           pytest pipelines/db/ -m db -v --alluredir=reports/allure-db -n auto --maxfail=3
         continue-on-error: true
-
       - name: Upload results
         uses: actions/upload-artifact@v4
         if: always()
@@ -211,42 +151,32 @@ jobs:
           path: reports/allure-db/
           retention-days: 7
 
-  # ============================================
-  # UI TESTS (Playwright)
-  # ============================================
   ui-tests:
     name: UI Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [lint, unit-tests]
+    needs: [unit-tests]
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 1
-
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-
       - name: Cache Playwright
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-chromium-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-chromium-
-
       - name: Install Playwright
         run: |
           pip install -r requirements.txt
           playwright install --with-deps chromium
-
       - name: Run UI tests
         run: |
           pytest pipelines/ui/ -m ui -v --alluredir=reports/allure-ui -n auto --tb=short --maxfail=3 --reruns 2 --reruns-delay 5
         continue-on-error: true
-
       - name: Upload results
         uses: actions/upload-artifact@v4
         if: always()
@@ -254,181 +184,6 @@ jobs:
           name: allure-ui
           path: reports/allure-ui/
 
-  # ============================================
-  # CROSS-BROWSER TESTS (disabled - no tests)
-  # ============================================
-  crossbrowser-tests:
-    name: Cross-Browser Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [lint, unit-tests]
-    if: false
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-
-      - name: Install Playwright
-        run: |
-          pip install -r requirements.txt
-          playwright install --with-deps firefox webkit
-
-      - name: Run cross-browser tests
-        run: |
-          pytest pipelines/ui/ -m crossbrowser -v --tb=short --maxfail=3
-        continue-on-error: true
-
-  # ============================================
-  # KAFKA TESTS (disabled - no cluster)
-  # ============================================
-  kafka-tests:
-    name: Kafka Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [lint, unit-tests]
-    if: false
-    services:
-      kafka:
-        image: confluentinc/cp-kafka:7.5.0
-        env:
-          KAFKA_NODE_ID: 1
-          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-          KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
-          KAFKA_PROCESS_ROLES: broker,controller
-        ports:
-          - 9092:9092
-        options: >-
-          --health-cmd "kafka-broker-api-versions --bootstrap-server localhost:9092"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-
-      - name: Run Kafka tests
-        run: |
-          pip install -r requirements.txt
-          export KAFKA_BROKERS=localhost:9092
-          pytest pipelines/kafka/ -m kafka -v -n auto --tb=short --maxfail=3
-        continue-on-error: true
-
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: allure-kafka
-          path: reports/allure-kafka/
-
-  # ============================================
-  # LOAD TESTS (disabled - schedule only)
-  # ============================================
-  load-tests:
-    name: Load Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [lint, unit-tests]
-    if: false
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-
-      - name: Run load tests
-        run: |
-          pip install -r requirements.txt
-          export USE_MOCK=true
-          locust -f pipelines/load/locustfile.py \
-            --headless \
-            --users 100 \
-            --spawn-rate 10 \
-            --run-time 60s \
-            --host ${{ secrets.APP_URL || 'http://localhost:8080' }} \
-            --html reports/load-report.html
-        continue-on-error: true
-
-      - name: Upload report
-        uses: actions/upload-artifact@v4
-        with:
-          name: load-report
-          path: reports/load-report.html
-
-  # ============================================
-  # BUILD (disabled - manual only)
-  # ============================================
-  build:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [lint, unit-tests]
-    if: false
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build Docker image
-        run: docker build -t amocrm-qa:${{ github.sha }} .
-
-      - name: Run container test
-        run: |
-          docker run -d --name test-app -p 8080:8080 amocrm-qa:${{ github.sha }}
-          sleep 5
-          curl -f --max-time 5 http://localhost:8080/health || exit 1
-          docker rm -f test-app
-
-  # ============================================
-  # ALLURE REPORT GENERATION
-  # ============================================
-  generate-report:
-    name: Generate Allure Report
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [api-tests, db-tests, ui-tests]
-    if: always()
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Download all results
-        uses: actions/download-artifact@v4
-        with:
-          path: reports/
-          merge-multiple: true
-
-      - name: Consolidate Allure results
-        run: |
-          mkdir -p reports/allure-results
-          find reports -name "*.json" -type f -exec mv {} reports/allure-results/ \; 2>/dev/null || true
-          ls -la reports/allure-results/ || echo "No results"
-
-      - name: Show summary
-        run: |
-          echo "Test results available as artifacts:"
-          ls -la reports/
-
-  # ============================================
-  # NOTIFICATIONS (main/develop only)
-  # ============================================
   notify:
     name: Notify Results
     runs-on: ubuntu-latest
@@ -449,31 +204,14 @@ jobs:
           fi
           echo "status_icon=$STATUS_ICON" >> $GITHUB_OUTPUT
           echo "status_text=$STATUS_TEXT" >> $GITHUB_OUTPUT
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Send Telegram notification
         if: success()
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Telegram not configured, skipping"
+            echo "Telegram not configured"
             exit 0
           fi
           curl -s --max-time 10 -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="${{ steps.summary.outputs.status_icon }} CI ${{ steps.summary.outputs.status_text }} on main%0A%0A🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -d text="${{ steps.summary.outputs.status_icon }} CI ${{ steps.summary.outputs.status_text }} on main%0A%0Ahttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             -d parse_mode="Markdown"
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-      - name: Send Discord notification
-        if: success()
-        run: |
-          if [ -n "${{ secrets.DISCORD_WEBHOOK }}" ]; then
-            curl -s --max-time 10 -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
-              -H "Content-Type: application/json" \
-              -d '{"content": "✅ CI PASSED https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
-          fi
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
