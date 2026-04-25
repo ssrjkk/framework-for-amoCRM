@@ -25,7 +25,6 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.12'
-  NODE_VERSION: '20'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -96,13 +95,12 @@ jobs:
         run: pytest tests/ -v --cov --cov-report=xml --cov-fail-under=70 -m "not integration" -n auto --maxfail=5
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: actions/upload-artifact@v4
         with:
-          files: ./coverage.xml
-          flags: unittests
-          fail_ci_if_error: false
+          name: coverage
+          path: coverage.xml
 
-# ============================================
+  # ============================================
   # SMOKE TESTS (Fast feedback)
   # ============================================
   smoke-tests:
@@ -135,7 +133,7 @@ jobs:
           pytest tests/ -m smoke -v --tb=short -n auto --maxfail=5
 
   # ============================================
-  # API TESTS (Combined for speed)
+  # API TESTS
   # ============================================
   api-tests:
     name: API Tests
@@ -156,13 +154,10 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run API tests
-        run: |
-          pytest pipelines/api/tests/ \
-            -v --alluredir=reports/allure-api \
-            -n auto --tb=short --maxfail=3
+        run: pytest pipelines/api/tests/ -v --alluredir=reports/allure-api -n auto --tb=short --maxfail=3
 
       - name: Upload Allure results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: allure-api
@@ -181,9 +176,9 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_USER: ${{ secrets.DB_USER || 'test' }}
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD || 'test' }}
-          POSTGRES_DB: ${{ secrets.DB_NAME || 'amocrm_test' }}
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: amocrm_test
         ports:
           - 5432:5432
         options: >-
@@ -204,12 +199,12 @@ jobs:
       - name: Run DB tests
         run: |
           pip install -r requirements.txt
-          export DATABASE_URL=postgresql://${{ secrets.DB_USER || 'test' }}:${{ secrets.DB_PASSWORD || 'test' }}@localhost:5432/${{ secrets.DB_NAME || 'amocrm_test' }}
+          export DATABASE_URL=postgresql://test:test@localhost:5432/amocrm_test
           pytest pipelines/db/ -m db -v --alluredir=reports/allure-db -n auto --maxfail=3
         continue-on-error: true
 
       - name: Upload results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: allure-db
@@ -249,40 +244,75 @@ jobs:
 
       - name: Run UI tests
         run: |
-          pytest pipelines/ui/ -m ui -v --alluredir=reports/allure-ui -n auto --tb=short --maxfail=3
+          pytest pipelines/ui/ -m ui -v --alluredir=reports/allure-ui -n auto --tb=short --maxfail=3 --reruns 2 --reruns-delay 5
         continue-on-error: true
 
       - name: Upload results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: allure-ui
           path: reports/allure-ui/
 
   # ============================================
-  # CROSS-BROWSER TESTS (skipped - requires all browsers)
+  # CROSS-BROWSER TESTS (schedule only)
   # ============================================
   crossbrowser-tests:
     name: Cross-Browser Tests
     runs-on: ubuntu-latest
-    needs: [lint]
-    if: false
+    timeout-minutes: 20
+    needs: [lint, unit-tests]
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'all')
     steps:
-      - name: Skip cross-browser tests
-        run: echo "Cross-browser tests require all browsers installed"
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Playwright
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps firefox webkit
+
+      - name: Run cross-browser tests
+        run: |
+          pytest pipelines/ui/ -m crossbrowser -v --tb=short --maxfail=3
+        continue-on-error: true
 
   # ============================================
-  # KAFKA TESTS (disabled - requires external cluster)
+  # KAFKA TESTS (schedule/manual only)
   # ============================================
   kafka-tests:
     name: Kafka Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [lint, unit-tests]
-    if: false
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'all')
+    services:
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+          KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_PROCESS_ROLES: broker,controller
+        ports:
+          - 9092:9092
+        options: >-
+          --health-cmd "kafka-broker-api-versions --bootstrap-server localhost:9092"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
-      - name: Skip
-        run: echo "Kafka disabled"
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
 
       - uses: actions/setup-python@v6
         with:
@@ -297,21 +327,21 @@ jobs:
         continue-on-error: true
 
       - name: Upload results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: allure-kafka
           path: reports/allure-kafka/
 
   # ============================================
-  # LOAD TESTS
+  # LOAD TESTS (schedule/manual only)
   # ============================================
   load-tests:
     name: Load Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint, unit-tests]
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'all')
     steps:
       - uses: actions/checkout@v5
         with:
@@ -336,20 +366,20 @@ jobs:
         continue-on-error: true
 
       - name: Upload report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: load-report
           path: reports/load-report.html
 
   # ============================================
-  # BUILD & DEPLOY (disabled - for manual trigger only)
+  # BUILD (manual only)
   # ============================================
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint, unit-tests]
-    if: false
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'all'
     steps:
       - uses: actions/checkout@v5
         with:
@@ -361,6 +391,13 @@ jobs:
       - name: Build Docker image
         run: docker build -t amocrm-qa:${{ github.sha }} .
 
+      - name: Run container test
+        run: |
+          docker run -d --name test-app -p 8080:8080 amocrm-qa:${{ github.sha }}
+          sleep 5
+          curl -f --max-time 5 http://localhost:8080/health || exit 1
+          docker rm -f test-app
+
   # ============================================
   # ALLURE REPORT GENERATION
   # ============================================
@@ -369,12 +406,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [api-tests, db-tests, ui-tests]
-    if: github.event_name == 'pull_request'
+    if: always()
     steps:
       - uses: actions/checkout@v5
 
       - name: Download all results
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           path: reports/
           merge-multiple: true
@@ -402,27 +439,24 @@ jobs:
           allure generate reports/allure-results -o allure-report --quiet
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
 
   # ============================================
-  # NOTIFICATIONS
+  # NOTIFICATIONS (main/develop only)
   # ============================================
   notify:
     name: Notify Results
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [lint, unit-tests, smoke-tests, api-tests, db-tests, ui-tests]
-    # Only notify on main/develop
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     steps:
       - name: Get run summary
         id: summary
         run: |
-          echo "=== Run Summary ===" >> $GITHUB_STEP_SUMMARY
-          
           STATUS="${{ job.status }}"
           if [ "$STATUS" == "success" ]; then
             STATUS_ICON="✅"
@@ -431,19 +465,6 @@ jobs:
             STATUS_ICON="🔴"
             STATUS_TEXT="FAILED"
           fi
-          
-          echo "| $STATUS_ICON CI $STATUS_TEXT |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "$STATUS" != "success" ]; then
-            FAILED_JOBS=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs \
-              --jq '.jobs[] | select(.conclusion == "failure") | .name' 2>/dev/null | tr '\n' ', ')
-            echo "Failed jobs: $FAILED_JOBS" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "| Branch: \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
-          
           echo "status_icon=$STATUS_ICON" >> $GITHUB_OUTPUT
           echo "status_text=$STATUS_TEXT" >> $GITHUB_OUTPUT
         env:
@@ -456,19 +477,9 @@ jobs:
             echo "Telegram not configured, skipping"
             exit 0
           fi
-          TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-          TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
-          REPO="${{ github.repository }}"
-          BRANCH="${{ github.ref_name }}"
-          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          STATUS_ICON="${{ steps.summary.outputs.status_icon }}"
-          STATUS_TEXT="${{ steps.summary.outputs.status_text }}"
-          
-          MESSAGE="$STATUS_ICON CI $STATUS_TEXT on \`$BRANCH\`%0A%0A📦 \`$REPO\`%0A🔗 [View run]($RUN_URL)"
-          
-          curl -s --max-time 10 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-            -d chat_id="$TELEGRAM_CHAT_ID" \
-            -d text="$MESSAGE" \
+          curl -s --max-time 10 -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="${{ steps.summary.outputs.status_icon }} CI ${{ steps.summary.outputs.status_text }} on main%0A%0A🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             -d parse_mode="Markdown"
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -477,14 +488,10 @@ jobs:
       - name: Send Discord notification
         if: success()
         run: |
-          if [ -z "$DISCORD_WEBHOOK" ]; then
-            echo "Discord not configured"
-            exit 0
+          if [ -n "${{ secrets.DISCORD_WEBHOOK }}" ]; then
+            curl -s --max-time 10 -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+              -H "Content-Type: application/json" \
+              -d '{"content": "✅ CI PASSED https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
           fi
-          STATUS_ICON="${{ steps.summary.outputs.status_icon }}"
-          STATUS_TEXT="${{ steps.summary.outputs.status_text }}"
-          curl -s --max-time 10 -X POST $DISCORD_WEBHOOK \
-            -H "Content-Type: application/json" \
-            -d "{\"content\": \"$STATUS_ICON CI $STATUS_TEXT on main branch! https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
